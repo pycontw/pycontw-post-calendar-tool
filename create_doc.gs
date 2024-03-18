@@ -8,25 +8,81 @@ function onOpen() {
     .addToUi()
 }
 
+function createDocFromTemplate(docTitle, inputDict, templateId){
+  var templateFile = DriveApp.getFileById(templateId);
+  file = templateFile.makeCopy();
+  file.setName(docTitle)
+  doc_id = file.getId();
+
+  var body = DocumentApp.openById(doc_id).getBody();
+  for (const [key, value] of Object.entries(inputDict)) {
+    body.replaceText("{{" + key + "}}", value);
+  }
+
+  // (special hanle) link to folder
+  var folder_link_ele = body.findText(inputDict['folder_link']).getElement();
+  folder_link_ele.asText().setLinkUrl(inputDict['folder_link']);
+
+  return doc_id
+}
+
+function getRowInfo(sheet, row){
+  let team = sheet.getRange(row, 1).getValue();
+  let client = sheet.getRange(row, 2).getValue();
+  let postDate = sheet.getRange(row, 3).getValue();
+  var date = Utilities.formatDate(postDate, "GMT+8", "MMdd");
+  let title = sheet.getRange(row, 4).getValue();
+  let category = sheet.getRange(row, 5).getValue();
+  let fb = sheet.getRange(row, 6).getValue();
+  let x = sheet.getRange(row, 7).getValue();
+  let ig = sheet.getRange(row, 8).getValue();
+  let linkedin = sheet.getRange(row, 9).getValue();
+  let other_social = sheet.getRange(row, 10).getValue();
+
+  let pendding_text = sheet.getRange(row, 13).getValue();
+
+  return {
+    'team': team,
+    'client': client,
+    'date': date,
+    'title': title,
+    'category': category,
+    'fb': fb,
+    'x': x,
+    'ig': ig,
+    'linkedin': linkedin,
+    'other_social': other_social,
+    'pendding_text': pendding_text
+  }
+}
+
 /* Create google doc and make sure if user would create a new folder and file */
 function createPostDoc(){
+  var templateId = '1sI3hSEdEpwNF2QWv3XXBLToXyl-JefLd10Tozve0Pnc';
+
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("貼文表單");
   var row = sheet.getActiveRange().getRow();
   Logger.log('row: %d', row);
-  let title = sheet.getRange(row, 4).getValue();
-
-  let postDate = sheet.getRange(row, 3).getValue();
-  let team = sheet.getRange(row, 1).getValue();
-  var date = Utilities.formatDate(postDate, "GMT+8", "MMdd");    
-  // var datee = Utilities.formatDate(postDate, "GMT+8", "d"); 
-  docTitle =  date + " - " + team + " - " + title;
+  let info = getRowInfo(sheet, row);
+  
+  docTitle =  info['date'] + " - " + info['team'] + " - " + info['title'];
   var text = "是否要新增 " + docTitle + " 的 google doc 文件";
 
   var response = Browser.msgBox('Greetings', text, Browser.Buttons.YES_NO);
   if (response == "yes") {
     Logger.log('The user clicked "Yes."');
-    var doc_id = createDoc(docTitle);
-    var url = "https://docs.google.com/document/d/"+doc_id
+    var parentFolder = DriveApp.getFolderById('1mI4n-gXhVSmvDqHhzJGfPIT0C7uFEhwA');
+    var target_folder_ID = parentFolder.createFolder(docTitle).getId();
+    var inputDict = {
+      'date': info['date'],
+      'team': info['team'],
+      'title': info['title'],
+      'pendding_text': info['pendding_text'],
+      'folder_link': 'https://drive.google.com/drive/folders/' + target_folder_ID
+    };
+    var doc_id = createDocFromTemplate(docTitle, inputDict, templateId);
+    moveFile(doc_id, target_folder_ID);
+    var url = "https://docs.google.com/document/d/" + doc_id;
     openUrl(url);
   } else {
     Logger.log('The user clicked "No" or the dialog\'s close button.');
@@ -40,19 +96,6 @@ function createPostDoc(){
   rangeToAddLink.setRichTextValue(richText);
 }
 
-function createDoc(file_name) {
-  var parentFolder=DriveApp.getFolderById('1mI4n-gXhVSmvDqHhzJGfPIT0C7uFEhwA');
-  var target_folder_ID = parentFolder.createFolder(file_name).getId();
-
-  let new_doc = DocumentApp.create(file_name);
-  let doc_id = new_doc.getId();
-  moveFile(doc_id, target_folder_ID);
-  var target_folder_link = "https://drive.google.com/drive/folders/" + target_folder_ID;
-  template_id = "1JPqaPfXbkzWwXRKbhvPJWwQnfe1RV_s2QpuR0jMfIZc";
-  importInDoc(doc_id, template_id, target_folder_link, file_name);
-
-  return doc_id;
-}
 function openUrl( url ){
   var html = HtmlService.createHtmlOutput('<html><script>'
   +'window.close = function(){window.setTimeout(function(){google.script.host.close()},9)};'
@@ -75,48 +118,6 @@ function openUrl( url ){
 function moveFile(fileId, destinationFolderId) {
   let destinationFolder = DriveApp.getFolderById(destinationFolderId);
   DriveApp.getFileById(fileId).moveTo(destinationFolder);
-}
-
-function importInDoc(new_id, template_id,target_folder_link, file_name) {
-  var baseDoc = DocumentApp.openById(new_id);
-  var body = baseDoc.getBody();
-  var paragraph_ele;
-  var ele;
-
-  var otherBody = DocumentApp.openById(template_id).getBody();
-  var totalElements = otherBody.getNumChildren();
-  for( var j = 0; j < totalElements; ++j ) {
-    var element = otherBody.getChild(j).copy();
-    Logger.log("element.getText(): %s", element.getText());
-    var type = element.getType();
-    if( type == DocumentApp.ElementType.PARAGRAPH )
-    {
-      paragraph_ele = body.appendParagraph(element);
-      if (paragraph_ele.getText()=="https://drive.google.com/drive/u/1/folders/1i6YmSGFgEpp7vpFGs5IRRxm4cnN03xx-") 
-      {
-          body.appendParagraph(target_folder_link);
-          body.removeChild(paragraph_ele);
-      }
-      if (j==0) 
-      {
-          ele = body.appendParagraph(file_name);
-          ele.setHeading(DocumentApp.ParagraphHeading.TITLE);
-          body.removeChild(paragraph_ele);
-      }   
-    }
-    else if( type == DocumentApp.ElementType.TABLE )
-      body.appendTable(element);
-    else if( type == DocumentApp.ElementType.LIST_ITEM )
-      body.appendListItem(element);
-    else if( type == DocumentApp.ElementType.INLINE_IMAGE )
-      body.appendImage(element);
-    else if( type == DocumentApp.ElementType.TABLE_OF_CONTENTS )
-      continue;
-    // add other element types as you want
-
-    else
-      throw new Error("According to the doc this type couldn't appear in the body: "+type);
-  }
 }
 
 /* test prompt feature*/
