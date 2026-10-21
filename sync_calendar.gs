@@ -12,6 +12,7 @@ function onEdit(e) {
 
   _updateScheduledPosts(range, sheet, row);
   _insertDashboardLink(sheet, row, "成效報表");
+  _insertEnhancedDashboardLink(sheet, row, "範圍內的成效");
 }
 
 function checkCellPlace(c) {
@@ -268,20 +269,29 @@ const _insertDashboardLink = (sheet, editedRow, editedValue) => {
   linkCell.setRichTextValue(richTextValue);
 }
 
-const _updateScheduledPosts = (range) => {
+const _insertEnhancedDashboardLink = (sheet, editedRow, editedValue) => {
+  const linkColumn = 19;
+  const linkCell = sheet.getRange(editedRow, linkColumn);
+  const linkUrl = "https://metabase.pycon.tw/question/215?date1=2024-06-01&date2=2024-06-20"
+  const richTextValue = SpreadsheetApp.newRichTextValue()
+    .setText(editedValue)
+    .setLinkUrl(linkUrl)
+    .build();
+  linkCell.setRichTextValue(richTextValue);
+}
+
+const _updateScheduledPosts = (range, sheet, row) => {
   let editRange = range.getA1Notation().split(":");
 
   // 根據 編輯範圍 採取對應處理方式
-  if(editRange.length > 1) {
-    console.log("Start: "+ editRange[0] + ",End: "+ editRange[1]);
-
+  if (editRange.length > 1) {
+    console.log("Start: " + editRange[0] + ",End: " + editRange[1]);
     // 編輯 多欄位，且欄位範圍符合條件則採取 刷新日曆
     reflashCalendar();
   } else {
-    console.log("Place: "+ editRange[0].charCodeAt(0));
-
+    console.log("Place: " + editRange[0].charCodeAt(0));
     // 編輯 單一欄位，且欄位範圍符合條件則採取 刷新日曆
-    if(checkCellPlace(editRange[0].charCodeAt(0))) {
+    if (checkCellPlace(editRange[0].charCodeAt(0))) {
       reflashCalendar();
     } else {
       console.log("Edit is outside of the target range.");
